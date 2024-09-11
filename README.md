@@ -1,6 +1,6 @@
 # P2PNetwork
 ## Context
-The code simulates a peer-to-peer network, in which new nodes randomly join a single pre-existing node in the network as the network grows.
+The code simulates a peer-to-peer network, in which new nodes randomly join a single pre-existing node in the network as the network grows. Also note that for Deliverable 1 of this assignment, machines.txt will be empty. For later deliverables, it will be used as a master document to note which machines have access to which files in addition to which machines are participating in the network.
 
 ## Set Up
 1. SSH into the machine dc01 and create a folder, "F", in your directory somewhere.
@@ -23,3 +23,4 @@ The code simulates a peer-to-peer network, in which new nodes randomly join a si
 9. Now type 'java P2P' and verify that along with the host name being printed out, a neighbor list consisting of just the first host name of dcXX is also printed out.
 10. Switch over to the first terminal (of dcXX) and verify that a neighbor list was printed after 'java P2P' was run on dcYY.
 11. Repeat this process with other machines and verify that the neighbor picked by each incoming machine is random.
+12. When you are done with a particular machine, simply hit Ctrl+C to exit the process.
