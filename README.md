@@ -24,3 +24,7 @@ The code simulates a peer-to-peer network, in which new nodes randomly join a si
 10. Switch over to the first terminal (of dcXX) and verify that a neighbor list was printed after 'java P2P' was run on dcYY.
 11. Repeat this process with other machines and verify that the neighbor picked by each incoming machine is random.
 12. When you are done with a particular machine, simply hit Ctrl+C to exit the process.
+
+## Searching for files
+1. Once in, you can simply type "Search <X>" where X represents a keyword (first token in a file) or an actual file name.
+2. After waiting for a bit, you can see all the search results. The search will terminate at the hop count where it found at least 1 result. If the final hop count of 16 fails, an error output will be produced.
