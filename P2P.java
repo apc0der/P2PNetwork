@@ -57,7 +57,7 @@ class Input extends Thread {
             BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in));
             while (true) {
                 String[] searchReq = stdIn.readLine().split(" ");
-                System.out.println(Arrays.toString(searchReq)); // del this
+                // System.out.println(Arrays.toString(searchReq)); // del this
                 if (searchReq[0].equals("Search")) {
                     for (int i = 1; i <= 16; i*=2) {
                         int cuh = (new Random()).nextInt(9000)+1000;
@@ -79,6 +79,9 @@ class Input extends Thread {
                             break;
                         }
                     }
+                    System.out.println("Search for " + searchReq[1] + " concluded...");
+                } else {
+                  System.out.println("Not a valid search!");
                 }
             }
         } catch (Exception e) {
@@ -97,7 +100,7 @@ class EdgeSender extends Thread{
     public EdgeSender(Socket s, String forward, MType t, int hl) {
         from = s;
         toSend = forward;
-        System.out.println("Got a message --> " + toSend);
+        // System.out.println("Got a message --> " + toSend);
         m = t;
         replies = new ArrayList<>();
         h = hl+1;
@@ -109,7 +112,7 @@ class EdgeSender extends Thread{
             case SEARCH:
                 for (EdgeReceiver p: Listener.peers) {
                     try {
-                        System.out.println("Sending the above message...");
+                        // System.out.println("Sending the above message...");
                         PrintWriter pw = new PrintWriter(new OutputStreamWriter(p.src.getOutputStream()));
                         pw.println("S " + toSend);
                         pw.flush();
@@ -124,7 +127,7 @@ class EdgeSender extends Thread{
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
-                System.out.println("Got all my replies!");
+                // System.out.println("Got all my replies!");
                 if (from == null) {
                     break;
                 }
@@ -159,11 +162,11 @@ class EdgeReceiver extends Thread {
     public void run() {
         try {
             BufferedReader br = new BufferedReader(new InputStreamReader(src.getInputStream()));
-            System.out.println("Before the while(true)...");
+            // System.out.println("Before the while(true)...");
             while(true) {
-                System.out.println("Before reading from buffered reader...");
+                // System.out.println("Before reading from buffered reader...");
                 msg = br.readLine();
-                System.out.println("Received the message... " + msg);
+                // System.out.println("Received the message... " + msg);
                 m = MType.query(msg.charAt(0));
                 String[] pieces = msg.substring(2).split(" ");
                 int ID = Integer.parseInt(pieces[0]);
@@ -198,7 +201,7 @@ class EdgeReceiver extends Thread {
                         }
                         break;
                     case REPLY:
-                        System.out.println(Arrays.toString(pieces));
+                        // System.out.println(Arrays.toString(pieces));
 
                         if (pieces.length > 1) {
                             for (String x : pieces[1].split("\\t")) {
