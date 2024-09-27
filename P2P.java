@@ -1,6 +1,5 @@
 import java.io.*;
 import java.net.*;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class P2P {
@@ -10,7 +9,7 @@ public class P2P {
         while (sc.hasNext()) {
             p.add(sc.next());
         }
-        if (p.size()==0) {
+        if (p.isEmpty()) {
             PrintWriter pw = new PrintWriter(new FileWriter("../machines.txt"));
             pw.println(InetAddress.getLocalHost().getHostName());
             pw.close();
@@ -35,7 +34,7 @@ public class P2P {
 }
 
 enum MType {
-    SEARCH, REPLY, TRANSFER, BRUH;
+    SEARCH, REPLY, TRANSFER, EXIT;
     public static MType query(char c) {
         if (c == 'S') {
             return SEARCH; // ID (4 dig) + hops + keyword
@@ -44,21 +43,44 @@ enum MType {
         } else if (c  == 'T') {
             return TRANSFER; // ID + fileName
         } else {
-            return BRUH;
+            return EXIT; // ID + newHostName
         }
     }
 }
 
 class Input extends Thread {
-
     @Override
     public void run() {
         try {
             BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in));
             while (true) {
                 String[] searchReq = stdIn.readLine().split(" ");
-                // System.out.println(Arrays.toString(searchReq)); // del this
-                if (searchReq[0].equals("Search")) {
+                if (searchReq[0].equals("Peers")) {
+                    System.out.println("Neighbors: ");
+                    int i = 1;
+                    for(EdgeReceiver peer: Listener.peers) {
+                        System.out.println((i++) + ") " + peer.src.getInetAddress().getHostName());
+                    }
+                    System.out.println("~~~");
+                } else if (searchReq[0].equals("Leave")) {
+                    if (!Listener.peers.isEmpty()) {
+                        EdgeReceiver replace = Listener.peers.get(0);
+                        String msg = InetAddress.getLocalHost().getHostName() + " " + replace.src.getInetAddress().getHostName();
+                        for (EdgeReceiver er: Listener.peers) {
+                            EdgeSender rip = new EdgeSender(er.src, msg, MType.EXIT, -1);
+                            rip.start();
+                        }
+                    }
+                    Scanner mr = new Scanner(new File("../machines.txt"));
+                    ArrayList<String> p = new ArrayList<>();
+                    while (mr.hasNext()) { p.add(mr.next()); }
+                    p.remove(InetAddress.getLocalHost().getHostName());
+                    PrintWriter mw = new PrintWriter(new File("../machines.txt"));
+                    for (String q: p) { mw.println(q); }
+                    mr.close();
+                    mw.close();
+                    System.exit(0);
+                } else if (searchReq[0].equals("Search")) {
                     for (int i = 1; i <= 16; i*=2) {
                         int cuh = (new Random()).nextInt(9000)+1000;
                         System.out.println("Initiating search " + cuh + " with a hop count of... " + i);
@@ -74,14 +96,35 @@ class Input extends Thread {
                             System.out.println("File/kwd not found :(");
                         } else {
                             for (int j = 0; j < edgar.replies.size(); j++) {
-                                System.out.println((j+1) + ") " + edgar.replies.get(j));
+                                System.out.println((j+1) + ") (" + edgar.replies.get(j) + ")");
+                            }
+                            System.out.println("Choose a peer (1 - " + edgar.replies.size() + " to download from, or hit 0 to cancel... ");
+                            int c = Integer.parseInt(stdIn.readLine());
+                            if (c != 0) {
+                                String[] pcs = edgar.replies.get(c-1).split(",");
+                                System.out.println(Arrays.toString(pcs));
+                                try {
+                                    EdgeSender req = new EdgeSender(null, cuh + " " + pcs[2] + ".utdallas.edu " + pcs[1], MType.TRANSFER, -1);
+                                    req.start();
+                                    try {
+                                        req.join();
+                                    } catch (Exception e) {
+                                        throw new RuntimeException(e);
+                                    }
+                                    System.out.println("File received!");
+                                } catch (Exception e) {
+                                    throw new StreamCorruptedException();
+                                }
+                            } else {
+                                System.out.println("Download cancelled...");
                             }
                             break;
                         }
                     }
                     System.out.println("Search for " + searchReq[1] + " concluded...");
+
                 } else {
-                  System.out.println("Not a valid search!");
+                    System.out.println("Not a valid search!");
                 }
             }
         } catch (Exception e) {
@@ -91,7 +134,7 @@ class Input extends Thread {
 }
 
 class EdgeSender extends Thread{
-    private String toSend = "";
+    private String toSend;
     private Socket from;
     private MType m;
     private int h;
@@ -100,7 +143,6 @@ class EdgeSender extends Thread{
     public EdgeSender(Socket s, String forward, MType t, int hl) {
         from = s;
         toSend = forward;
-        // System.out.println("Got a message --> " + toSend);
         m = t;
         replies = new ArrayList<>();
         h = hl+1;
@@ -122,12 +164,11 @@ class EdgeSender extends Thread{
                 }
                 try {
                     synchronized(this) {
-                        this.wait((long)1000*h*2);
+                        this.wait((long)1000*h);
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
-                // System.out.println("Got all my replies!");
                 if (from == null) {
                     break;
                 }
@@ -135,7 +176,6 @@ class EdgeSender extends Thread{
                 try {
                     PrintWriter fromWriter = new PrintWriter(new OutputStreamWriter(from.getOutputStream()));
                     String gyat = "R " + toSend.substring(0, toSend.indexOf(" ")) + " " + String.join("\t", replies);
-                    System.out.println(gyat);
                     fromWriter.println(gyat);
                     fromWriter.flush();
                 } catch (IOException e) {
@@ -143,8 +183,48 @@ class EdgeSender extends Thread{
                 }
                 break;
             case TRANSFER:
-                // functionality needed
+                try {
+                    String[] x = toSend.split(" ");
+                    System.out.println(Arrays.toString(x)); // dbg
+                    Socket ftp = new Socket(x[1], 6969);
+                    PrintWriter fw = new PrintWriter(new OutputStreamWriter(ftp.getOutputStream()));
+                    BufferedReader br = new BufferedReader(new InputStreamReader(ftp.getInputStream()));
+                    String humbleRequest = "T " + x[0] + " " + x[2];
+                    System.out.println(humbleRequest); // dbg
+                    fw.println(humbleRequest);
+                    fw.flush();
+                    String[] dt = br.readLine().split("\\t");
+                    PrintWriter monkey = new PrintWriter(new FileWriter(new File(x[2])));
+                    for (String d: dt) { monkey.println(d); }
+                    monkey.close();
+                    ArrayList<String> fList = new ArrayList<>();
+                    Scanner libber = new Scanner(new File("lib.txt"));
+                    while (libber.hasNextLine()) { fList.add(libber.nextLine()); }
+                    libber.close();
+                    PrintWriter libWrit = new PrintWriter(new FileWriter(new File("lib.txt")));
+                    for (String f: fList) { libWrit.println(f); }
+                    libWrit.println(x[2]);
+                    libWrit.close();
+                    ftp.close();
+                } catch (IOException e) {
+                    throw new RuntimeException();
+                }
+                break;
+            case EXIT:
+                try {
+                    PrintWriter fromWriter = new PrintWriter(new OutputStreamWriter(from.getOutputStream()));
+                    fromWriter.println("E 1000 " + toSend);
+                    fromWriter.flush();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                break;
         }
+    }
+
+    @Override
+    public void interrupt() {
+        super.interrupt();
     }
 }
 
@@ -162,12 +242,12 @@ class EdgeReceiver extends Thread {
     public void run() {
         try {
             BufferedReader br = new BufferedReader(new InputStreamReader(src.getInputStream()));
-            // System.out.println("Before the while(true)...");
             while(true) {
-                // System.out.println("Before reading from buffered reader...");
                 msg = br.readLine();
-                // System.out.println("Received the message... " + msg);
+                if (msg == null) { break; }
+                System.out.println("Recv msg is... " + msg);
                 m = MType.query(msg.charAt(0));
+
                 String[] pieces = msg.substring(2).split(" ");
                 int ID = Integer.parseInt(pieces[0]);
                 switch(m) {
@@ -175,17 +255,18 @@ class EdgeReceiver extends Thread {
                         List<String> founds = new ArrayList<>();
                         int hopsLeft = Integer.parseInt(pieces[1]);
                         String kwd = pieces[2];
-                        System.out.println(kwd);
-                        // include search functionality here
+
                         Scanner libReader = new Scanner(new File("lib.txt"));
                         while (libReader.hasNext()) {
                             String f = libReader.next();
                             Scanner fRead = new Scanner(new File(f));
                             String bruh = fRead.next();
                             if (bruh.equals(kwd) || f.equals(kwd)) {
-                                founds.add("(" + kwd + "," + f + "," + InetAddress.getLocalHost().getHostName().substring(0, 4) + ")");
+                                founds.add(kwd + "," + f + "," + InetAddress.getLocalHost().getHostName().substring(0, 4));
                             }
+                            fRead.close();
                         }
+                        libReader.close();
                         if(Listener.id2s.containsKey(ID)) {
                             break;
                         }
@@ -201,8 +282,6 @@ class EdgeReceiver extends Thread {
                         }
                         break;
                     case REPLY:
-                        // System.out.println(Arrays.toString(pieces));
-
                         if (pieces.length > 1) {
                             for (String x : pieces[1].split("\\t")) {
                                 Listener.id2s.get(ID).replies.add(x);
@@ -210,32 +289,64 @@ class EdgeReceiver extends Thread {
                         }
                         break;
                     case TRANSFER:
-                        String fName = pieces[1];
-                        // functionality required
+                        System.out.println("File to read: " + pieces[1]); //dbg
+                        Scanner sc = new Scanner(new File(pieces[1]));
+                        ArrayList<String> data = new ArrayList<>();
+                        while (sc.hasNextLine()) {
+                            data.add(sc.nextLine());
+                        }
+                        String compressed = String.join("\t", data);
+                        System.out.println(compressed + "EOL");
+                        PrintWriter pw = new PrintWriter(new OutputStreamWriter(src.getOutputStream()));
+                        pw.println(compressed);
+                        pw.flush();
                         break;
+                    case EXIT:
+                        String leaver = pieces[1];
+                        String replacer = pieces[2];
+
+                        Iterator<EdgeReceiver> it = Listener.peers.iterator();
+                        while (it.hasNext()) {
+                            EdgeReceiver neighbor = it.next();
+                            if (neighbor.src.getInetAddress().getHostName().equals(leaver)) {
+                                try {
+                                    neighbor.src.close();
+                                } catch (IOException e) {
+                                    throw new RuntimeException(e);
+                                }
+                                it.remove();
+                                break;
+                            }
+                        }
+                        if (!replacer.equals(InetAddress.getLocalHost().getHostName())) {
+                            try {
+                                Socket repSock = new Socket(replacer, 6969);
+                                EdgeReceiver newP = new EdgeReceiver(repSock);
+                                Listener.peers.add(newP);
+                                newP.start();
+                            } catch (IOException e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
                 }
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            System.out.println("EdgeReceiver closed!");
         }
     }
 }
 
 class Listener extends Thread{
     public static HashMap<Integer, EdgeSender> id2s;
-    private final int PortNumber;
     public static ArrayList<EdgeReceiver> peers = new ArrayList<>();
-    public static HashSet<Integer> incoming = new HashSet<>();
 
     public Listener(int i) {
-        PortNumber = i;
         id2s = new HashMap<>();
     }
 
     public Listener(Socket skt, int i) {
         peers.add(new EdgeReceiver(skt));
         peers.get(peers.size()-1).start();
-        PortNumber = i;
         id2s = new HashMap<>();
     }
 
@@ -251,7 +362,7 @@ class Listener extends Thread{
     @Override
     public void run() {
         try {
-            ServerSocket serverSocket = new ServerSocket(PortNumber);
+            ServerSocket serverSocket = new ServerSocket(6969);
             System.out.println("New computer started on... " + InetAddress.getLocalHost().getHostName());
             if (peers.size()!= 0) {
                 printPeers();
@@ -260,9 +371,20 @@ class Listener extends Thread{
             mrInput.start();
             while (true) {
                 Socket clientSocket = serverSocket.accept();
-                peers.add(new EdgeReceiver(clientSocket));
-                peers.get(peers.size()-1).start();
-                printPeers();
+                boolean found = false;
+                for (EdgeReceiver p: peers) {
+                    if (p.src.getInetAddress().getHostName().equals(clientSocket.getInetAddress().getHostName())) {
+                        found = true;
+                    }
+                }
+                if (!found) {
+                    peers.add(new EdgeReceiver(clientSocket));
+                    peers.get(peers.size()-1).start();
+                    printPeers();
+                } else {
+                    EdgeReceiver er = new EdgeReceiver(clientSocket);
+                    er.start();
+                }
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
